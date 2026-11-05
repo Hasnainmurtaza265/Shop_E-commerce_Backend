@@ -42,10 +42,28 @@ app.use((req, res) => res.status(404).json({
 }));
 app.use(errorHandler);
 
+// const PORT = process.env.PORT || 4000;
+// connectDB().then(() => {
+//   app.listen(PORT, () => console.log(`Shop.Co backend running: http://localhost:${PORT}`));
+// }).catch(error => {
+//   console.error("Server startup failed:", error.message);
+//   process.exit(1);
+// });
 const PORT = process.env.PORT || 4000;
-connectDB().then(() => {
-  app.listen(PORT, () => console.log(`Shop.Co backend running: http://localhost:${PORT}`));
-}).catch(error => {
-  console.error("Server startup failed:", error.message);
-  process.exit(1);
+
+// Vercel ke liye DB sirf connect karo, listen mat karo
+connectDB().catch((error) => {
+  console.error("DB connection failed:", error.message);
 });
+
+// Local pe chalane ke liye listen, Vercel pe nahi
+if (require.main === module) {
+  connectDB().then(() => {
+    app.listen(PORT, () => console.log(`Shop.Co backend running on ${PORT}`));
+  }).catch((error) => {
+    console.error("Server startup failed:", error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = app;
