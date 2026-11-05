@@ -17,7 +17,7 @@ const allowedOrigins = (
   .split(",")
   .map((origin) => origin.trim().replace(/\/$/, ""));
 
-// CORS Configuration
+// CORS
 app.use(
   cors({
     origin(origin, callback) {
@@ -31,9 +31,7 @@ app.use(
         return callback(null, true);
       }
 
-      return callback(
-        new Error(`CORS blocked origin: ${origin}`)
-      );
+      return callback(new Error(`CORS blocked origin: ${origin}`));
     },
     credentials: true,
   })
@@ -53,10 +51,14 @@ app.use(
   express.static(path.join(__dirname, "public", "images"))
 );
 
-// Database Connection
+// Database connection cache
 let dbConnection;
 
-const connectDatabase = () => {
+const connectDatabase = async () => {
+  if (dbConnection && require("mongoose").connection.readyState === 1) {
+    return dbConnection;
+  }
+
   if (!dbConnection) {
     dbConnection = connectDB().catch((error) => {
       dbConnection = null;
@@ -68,7 +70,17 @@ const connectDatabase = () => {
   return dbConnection;
 };
 
-// Routes
+// IMPORTANT: Database middleware BEFORE API routes
+app.use(async (req, res, next) => {
+  try {
+    await connectDatabase();
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Root
 app.get("/", (_req, res) => {
   res.json({
     success: true,
@@ -84,13 +96,18 @@ app.get("/", (_req, res) => {
   });
 });
 
+// Health
 app.get("/api/health", (_req, res) => {
   res.json({
     success: true,
     status: "OK",
+    database: require("mongoose").connection.readyState === 1
+      ? "Connected"
+      : "Disconnected",
   });
 });
 
+// API Routes
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/products", require("./routes/productRoutes"));
 app.use("/api/categories", require("./routes/categoryRoutes"));
@@ -98,7 +115,7 @@ app.use("/api/cart", require("./routes/cartRoutes"));
 app.use("/api/wishlist", require("./routes/wishlistRoutes"));
 app.use("/api/orders", require("./routes/orderRoutes"));
 
-// 404 Handler
+// 404
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -113,21 +130,9 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 4000;
 
 if (require.main === module) {
-  connectDatabase()
-    .then(() => {
-      app.listen(PORT, () => {
-        console.log(`Shop.Co backend running on port ${PORT}`);
-      });
-    })
-    .catch((error) => {
-      console.error("Server startup failed:", error.message);
-      process.exit(1);
-    });
+  app.listen(PORT, () => {
+    console.log(`Shop.Co backend running on port ${PORT}`);
+  });
 }
-
-// Vercel Serverless
-app.use((req, res, next) => {
-  connectDatabase().then(() => next()).catch(next);
-});
 
 module.exports = app;
