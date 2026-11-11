@@ -126,7 +126,7 @@ app.use((req, res) => {
 // Error Handler
 app.use(errorHandler);
 
-// Local Development
+// Local Development.
 const PORT = process.env.PORT || 4000;
 
 if (require.main === module) {
