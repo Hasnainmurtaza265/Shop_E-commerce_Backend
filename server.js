@@ -5,35 +5,40 @@ const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const path = require("path");
+const mongoose = require("mongoose");
 
 const connectDB = require("./config/db");
 const errorHandler = require("./middleware/errorHandler");
 
 const app = express();
 
-const allowedOrigins = (
-  process.env.CLIENT_URL || "http://localhost:5173"
-)
-  .split(",")
-  .map((origin) => origin.trim().replace(/\/$/, ""));
+// Allowed frontend origins
+const allowedOrigins = [
+  "https://shopco-e.vercel.app",
+  "https://adadmin-eight.vercel.app",
+  "http://localhost:5173",
+  ...(process.env.CLIENT_URL || "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean),
+];
 
-// CORS
+// CORS Configuration
 app.use(
   cors({
     origin(origin, callback) {
       const normalizedOrigin = origin?.replace(/\/$/, "");
 
-      if (
-        !origin ||
-        allowedOrigins.includes("*") ||
-        allowedOrigins.includes(normalizedOrigin)
-      ) {
+      if (!origin || allowedOrigins.includes(normalizedOrigin)) {
         return callback(null, true);
       }
 
-      return callback(new Error(`CORS blocked origin: ${origin}`));
+      console.error("CORS blocked origin:", origin);
+      return callback(new Error("CORS origin not allowed"));
     },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -51,12 +56,12 @@ app.use(
   express.static(path.join(__dirname, "public", "images"))
 );
 
-// Database connection cache
+// Database Connection
 let dbConnection;
 
 const connectDatabase = async () => {
-  if (dbConnection && require("mongoose").connection.readyState === 1) {
-    return dbConnection;
+  if (mongoose.connection.readyState === 1) {
+    return;
   }
 
   if (!dbConnection) {
@@ -70,7 +75,7 @@ const connectDatabase = async () => {
   return dbConnection;
 };
 
-// IMPORTANT: Database middleware BEFORE API routes
+// Connect DB before API routes
 app.use(async (req, res, next) => {
   try {
     await connectDatabase();
@@ -92,6 +97,8 @@ app.get("/", (_req, res) => {
       "/api/cart",
       "/api/wishlist",
       "/api/orders",
+      "/api/admin",
+      "/api/health",
     ],
   });
 });
@@ -101,13 +108,13 @@ app.get("/api/health", (_req, res) => {
   res.json({
     success: true,
     status: "OK",
-    database: require("mongoose").connection.readyState === 1
-      ? "Connected"
-      : "Disconnected",
+    database:
+      mongoose.connection.readyState === 1
+        ? "Connected"
+        : "Disconnected",
   });
 });
 
-// API Routes
 // API Routes
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/products", require("./routes/productRoutes"));
@@ -128,7 +135,7 @@ app.use((req, res) => {
 // Error Handler
 app.use(errorHandler);
 
-// Local Development.
+// Local Development
 const PORT = process.env.PORT || 4000;
 
 if (require.main === module) {
